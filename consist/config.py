@@ -37,7 +37,7 @@ class CONSISTConfig:
     distance_metric: str = "cosine"
     batch_size: int = 4
     max_new_tokens: int = 128
-    model_name: str = "meta-llama/Llama-3.2-3B-Instruct"
+    model_name: str = "microsoft/Phi-3-mini-4k-instruct"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     device: str = "cuda"
     output_dir: str = "results"
