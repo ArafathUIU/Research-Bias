@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "consist"
+version = "0.1.0"
+description = "Consistency Disparity Score: measuring intersectional bias via self-consistency in LLMs"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black",
+    "flake8",
+]
+
+[tool.setuptools.packages.find]
+include = ["consist*"]
