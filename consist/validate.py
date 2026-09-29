@@ -81,7 +81,12 @@ class ValidationSuite:
 
         r_bbq_only, _ = stats.pearsonr(bbq_arr, downstream_arr)
 
-        cds_residual = stats.linregress(cds_arr, bbq_arr).residual
+        # BUG FIX (audit item 5): stats.linregress() does not expose a
+        # .residual attribute. Compute residuals manually:
+        # fit CDS on BBQ, then take residuals of BBQ after regressing out CDS.
+        reg_result = stats.linregress(cds_arr, bbq_arr)
+        bbq_predicted = reg_result.slope * cds_arr + reg_result.intercept
+        cds_residual = bbq_arr - bbq_predicted  # residuals of BBQ given CDS
         r_cds_residual, p_cds_residual = stats.pearsonr(cds_residual, downstream_arr)
 
         return {

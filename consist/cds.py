@@ -20,6 +20,11 @@ class PairCDS:
     ci_lower: float
     ci_upper: float
     p_value: Optional[float] = None
+    # New fields (FAIRLens extension, audit fix)
+    absolute_cds: float = 0.0      # |CDS| — disparity magnitude
+    direction_state: int = 0       # +1 / 0 / -1 from CI
+    prob_positive: float = 0.0     # fraction of bootstrap replicates with CDS > 0
+    prob_negative: float = 0.0     # fraction of bootstrap replicates with CDS < 0
 
 
 @dataclass
@@ -87,11 +92,21 @@ class CDSCalculator:
         embeddings_a: torch.Tensor,
         embeddings_b: torch.Tensor,
     ) -> tuple:
+        """
+        LEGACY (paired) bootstrap CI — preserved for legacy_reproduction track.
+
+        AUDIT NOTE (Bug 2): This uses the SAME index vector for A and B,
+        creating artificial pairing between independently generated responses.
+        This is the original CONSIST implementation, preserved for exact
+        reproduction of the pilot results.
+
+        For new FAIRLens v1 analyses, use bootstrap_ci_independent() instead.
+        """
         n = self.cfg.n_bootstrap
         k = embeddings_a.shape[0]
         diffs = []
         for _ in range(n):
-            idx = torch.randint(0, k, (k,))
+            idx = torch.randint(0, k, (k,))  # SAME index for A and B (paired)
             boot_a = embeddings_a[idx]
             boot_b = embeddings_b[idx]
             diffs.append(self.compute_cds(boot_a, boot_b))
@@ -100,6 +115,34 @@ class CDSCalculator:
         lower = float(diffs.quantile(alpha / 2).item())
         upper = float(diffs.quantile(1 - alpha / 2).item())
         return lower, upper
+
+    def bootstrap_ci_independent(
+        self,
+        embeddings_a: torch.Tensor,
+        embeddings_b: torch.Tensor,
+    ) -> tuple:
+        """
+        FAIRLens v1 independent bootstrap CI.
+
+        A and B are resampled with SEPARATE index vectors because
+        their responses were generated independently — no natural pairing
+        exists between response k_A and response k_B.
+        """
+        n = self.cfg.n_bootstrap
+        k_a = embeddings_a.shape[0]
+        k_b = embeddings_b.shape[0]
+        diffs = []
+        for _ in range(n):
+            idx_a = torch.randint(0, k_a, (k_a,))
+            idx_b = torch.randint(0, k_b, (k_b,))
+            boot_a = embeddings_a[idx_a]
+            boot_b = embeddings_b[idx_b]
+            diffs.append(self.compute_cds(boot_a, boot_b))
+        diffs_arr = np.array(diffs, dtype=np.float64)
+        alpha = 1 - self.cfg.confidence_level
+        lower = float(np.percentile(diffs_arr, 100 * alpha / 2))
+        upper = float(np.percentile(diffs_arr, 100 * (1 - alpha / 2)))
+        return lower, upper, diffs_arr
 
     def bootstrap_p_value(
         self,
@@ -127,14 +170,38 @@ class CDSCalculator:
         samples_a: List[str],
         samples_b: List[str],
         embed_fn,
+        bootstrap_method: str = "paired",
     ) -> PairCDS:
+        """
+        Evaluate a counterfactual pair and compute all metrics.
+
+        Parameters
+        ----------
+        bootstrap_method : "paired" (legacy default) | "independent" (FAIRLens v1)
+        """
         emb_a = embed_fn(samples_a)
         emb_b = embed_fn(samples_b)
         cds_val = self.compute_cds(emb_a, emb_b)
         disp_a = self.mean_dispersion(emb_a)
         disp_b = self.mean_dispersion(emb_b)
         centroid_dist = self.centroid_distance(emb_a, emb_b, self.cfg.distance_metric)
-        ci_lower, ci_upper = self.bootstrap_ci(emb_a, emb_b)
+
+        if bootstrap_method == "independent":
+            ci_lower, ci_upper, diffs_arr = self.bootstrap_ci_independent(emb_a, emb_b)
+            prob_pos = float((diffs_arr > 0).mean())
+            prob_neg = float((diffs_arr < 0).mean())
+        else:
+            ci_lower, ci_upper = self.bootstrap_ci(emb_a, emb_b)
+            prob_pos = 0.0
+            prob_neg = 0.0
+
+        # Direction state from CI
+        if ci_lower > 0.0:
+            dir_state = 1
+        elif ci_upper < 0.0:
+            dir_state = -1
+        else:
+            dir_state = 0
 
         return PairCDS(
             group_a=pair.group_a,
@@ -147,6 +214,10 @@ class CDSCalculator:
             distance_between_centroids=centroid_dist,
             ci_lower=ci_lower,
             ci_upper=ci_upper,
+            absolute_cds=abs(cds_val),
+            direction_state=dir_state,
+            prob_positive=prob_pos,
+            prob_negative=prob_neg,
         )
 
     def evaluate_prompt_set(

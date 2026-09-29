@@ -10,7 +10,10 @@ from .embed import EmbeddingExtractor
 from .cds import CDSCalculator, CDSResult
 from .stats import StatisticalAnalyzer
 from .validate import ValidationSuite, ValidationReport
-from .finetune import FineTuningIntervention
+try:
+    from .finetune import FineTuningIntervention
+except ImportError:
+    FineTuningIntervention = None  # type: ignore
 
 
 class CONSISTPipeline:
@@ -71,7 +74,8 @@ class CONSISTPipeline:
             if result is None:
                 raise ValueError(f"No results for T={temperature}")
         else:
-            temp = self.cfg.temperatures[0]
+            # BUG FIX (audit item 1): use primary_temperature, not temperatures[0]
+            temp = self.cfg.primary_temperature
             result = self.results.get(temp)
             if result is None:
                 raise ValueError("No results computed yet")
@@ -86,7 +90,8 @@ class CONSISTPipeline:
     ) -> ValidationReport:
         if not self.results:
             raise ValueError("Compute CDS before validation")
-        main_result = self.results[self.cfg.temperatures[0]]
+        # BUG FIX (audit item 1): use primary_temperature, not temperatures[0]
+        main_result = self.results[self.cfg.primary_temperature]
         suite = ValidationSuite(main_result)
         self.validation_report = suite.run_all(
             bbq_scores=bbq_scores,

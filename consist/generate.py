@@ -48,7 +48,10 @@ class GenerationHarness:
         max_new_tokens: Optional[int] = None,
     ) -> List[str]:
         num_samples = num_samples or self.cfg.num_samples
-        temperature = temperature if temperature is not None else self.cfg.temperatures[0]
+        # BUG FIX (audit item 1): use primary_temperature, never temperatures[0].
+        # The original code fell back to temperatures[0] = 0.3 silently,
+        # even though the paper's primary experiment used T=0.7.
+        temperature = temperature if temperature is not None else self.cfg.primary_temperature
         max_new_tokens = max_new_tokens or self.cfg.max_new_tokens
 
         outputs = []

@@ -8,3 +8,10 @@ dist/
 build/
 .vscode/
 .mimocode/
+results/generations/
+results/pilot/
+results/smoke/
+results/smoke_test/
+*.db
+*.db-wal
+*.db-shm
