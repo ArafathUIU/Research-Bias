@@ -357,6 +357,33 @@ class TestCorpusOutput:
         assert manifest["counts"]["ses_factorial_pairs"] == 160
         assert manifest["corpus_file_sha256"] == sha256_of_file(corpus_file)
 
+    def test_frozen_corpus_manifest_hash_matches_file_bytes(self):
+        """
+        Regression test: Verify that the committed frozen corpus file on disk
+        has an exact raw-byte SHA-256 matching its committed manifest.
+        Guarantees cross-platform LF line endings and detects any drift.
+        """
+        repo_root = Path(__file__).parent.parent
+        corpus_path = repo_root / "results" / "corpus" / "audit_corpus_fairlens_v1.jsonl"
+        manifest_path = repo_root / "results" / "corpus" / "corpus_manifest_fairlens_v1.json"
+
+        assert corpus_path.exists(), f"Committed corpus not found: {corpus_path}"
+        assert manifest_path.exists(), f"Committed manifest not found: {manifest_path}"
+
+        raw_bytes = corpus_path.read_bytes()
+        actual_sha = hashlib.sha256(raw_bytes).hexdigest()
+
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        expected_sha = manifest["corpus_file_sha256"]
+        assert actual_sha == expected_sha, (
+            f"Corpus file SHA-256 mismatch!\n"
+            f"  Actual raw bytes SHA: {actual_sha}\n"
+            f"  Manifest recorded SHA: {expected_sha}"
+        )
+
+
 
 # ---------------------------------------------------------------------------
 # 9. Pilot Pair Stratification

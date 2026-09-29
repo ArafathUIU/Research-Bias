@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "track": "legacy_reproduction",
-  "generated_at": "2026-09-29T17:34:41.420436+00:00",
+  "generated_at": "2026-09-29T18:10:09.825902+00:00",
   "counts": {
     "total_pairs": 240,
     "validated": 200,
@@ -49,7 +49,7 @@
     "stem_capability",
     "leadership"
   ],
-  "corpus_file_sha256": "e2f18674b5f31ab4d53de8bc670f0a0362338670ebd601ea295315d34de96a21",
+  "corpus_file_sha256": "787c8efcfb11b6f77cac7146979c13cee83d1e611359c15ba29e611b3b5a15f8",
   "corpus_file": "results\\corpus\\audit_corpus_legacy_reproduction.jsonl",
   "pair_sha256": {
     "PDAE8A20720F": "5a9263674c3b887efe01662e2c083904b01af670f28310658ad7d9752a70c53c",

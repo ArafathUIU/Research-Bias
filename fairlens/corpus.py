@@ -717,7 +717,16 @@ class CorpusValidator:
     ) -> Dict[str, str]:
         """
         Save corpus to disk and return a dict of output paths.
-        Atomically writes corpus JSONL and manifest.
+        Strict 9-step freeze protocol:
+          1. construct corpus (input pairs)
+          2. validate corpus (audits evaluated)
+          3. serialize FINAL corpus exactly once with strict Unix newlines (newline='\\n')
+          4. close/flush file (context manager + flush + fsync + atomic replace)
+          5. read final file as raw bytes
+          6. compute SHA-256 from those exact bytes
+          7. write that SHA into the manifest
+          8. immediately re-read corpus and verify manifest SHA == raw-file SHA
+          9. fail the freeze process if verification fails
         """
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -726,30 +735,40 @@ class CorpusValidator:
         rejections_path = out / f"rejections_{track}.jsonl"
         manifest_path = out / f"corpus_manifest_{track}.json"
 
+        # Step 2: Separate validated and rejected pairs
         valid_pairs = [p for p in pairs if p.ses_status in ("validated", "ses_unimplemented")]
         rejected_pairs = [p for p in pairs if p.ses_status == "rejected"]
 
-        # Write JSONL corpus atomically
+        # Step 3 & 4: Serialize FINAL corpus exactly once with newline="\n" and close/flush
         tmp_corpus = corpus_path.with_suffix(".tmp")
-        with open(tmp_corpus, "w", encoding="utf-8") as f:
+        with open(tmp_corpus, "w", encoding="utf-8", newline="\n") as f:
             for pair in valid_pairs:
                 f.write(json.dumps(pair.to_dict(), ensure_ascii=False) + "\n")
+            f.flush()
+            _os.fsync(f.fileno())
         tmp_corpus.replace(corpus_path)
 
-        # Write rejections
+        # Write rejections (if any) with strict newline="\n"
         tmp_rej = rejections_path.with_suffix(".tmp")
-        with open(tmp_rej, "w", encoding="utf-8") as f:
+        with open(tmp_rej, "w", encoding="utf-8", newline="\n") as f:
             for pair in rejected_pairs:
                 f.write(json.dumps(pair.to_dict(), ensure_ascii=False) + "\n")
+            f.flush()
+            _os.fsync(f.fileno())
         tmp_rej.replace(rejections_path)
 
-        # Compute per-pair hashes and file hash
-        pair_hashes = {p.pair_id: p.pair_sha256 for p in valid_pairs}
-        corpus_file_sha256 = sha256_of_file(corpus_path)
+        # Step 5: Read final file as raw bytes
+        raw_corpus_bytes = corpus_path.read_bytes()
 
+        # Step 6: Compute SHA-256 from those exact bytes
+        corpus_file_sha256 = hashlib.sha256(raw_corpus_bytes).hexdigest()
+
+        # Compute per-pair hashes
+        pair_hashes = {p.pair_id: p.pair_sha256 for p in valid_pairs}
         validated = [p for p in pairs if p.ses_status == "validated"]
         ses_flagged = [p for p in pairs if p.ses_status == "ses_unimplemented"]
 
+        # Step 7: Write that SHA into the manifest (also with strict newline="\n")
         manifest = {
             "schema_version": "2.0",
             "track": track,
@@ -785,9 +804,25 @@ class CorpusValidator:
         }
 
         tmp_manifest = manifest_path.with_suffix(".tmp")
-        with open(tmp_manifest, "w", encoding="utf-8") as f:
+        with open(tmp_manifest, "w", encoding="utf-8", newline="\n") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+            _os.fsync(f.fileno())
         tmp_manifest.replace(manifest_path)
+
+        # Step 8: Immediately re-read corpus and verify manifest SHA == raw-file SHA
+        post_read_bytes = corpus_path.read_bytes()
+        post_read_sha = hashlib.sha256(post_read_bytes).hexdigest()
+
+        # Step 9: Fail the freeze process if verification fails
+        if post_read_sha != corpus_file_sha256:
+            raise RuntimeError(
+                f"CORPUS FREEZE INTEGRITY VERIFICATION FAILED!\n"
+                f"Manifest recorded SHA: {corpus_file_sha256}\n"
+                f"Post-write actual SHA: {post_read_sha}\n"
+                f"Target file: {corpus_path}"
+            )
 
         return {
             "corpus": str(corpus_path),

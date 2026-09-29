@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "track": "fairlens_v1",
-  "generated_at": "2026-09-29T17:34:41.340656+00:00",
+  "generated_at": "2026-09-29T18:10:09.779337+00:00",
   "counts": {
     "total_pairs": 360,
     "validated": 360,
@@ -61,7 +61,7 @@
     "stem_capability",
     "leadership"
   ],
-  "corpus_file_sha256": "271cf2a39305d650658c9ea41627294dc44e35509a8615dd4f34b44d78254324",
+  "corpus_file_sha256": "097b98f4463f4ea9a2fd8eaee2e8ad155b81e549a7fe0ca4bee6d2a061fd97b6",
   "corpus_file": "results\\corpus\\audit_corpus_fairlens_v1.jsonl",
   "pair_sha256": {
     "PDAE8A20720F": "5a9263674c3b887efe01662e2c083904b01af670f28310658ad7d9752a70c53c",

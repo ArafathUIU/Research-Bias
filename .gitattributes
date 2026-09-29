@@ -1,0 +1,6 @@
+# Enforce Unix LF line endings for all JSONL and JSON files across all OS platforms
+*.jsonl text eol=lf
+*.json text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.ipynb text eol=lf
